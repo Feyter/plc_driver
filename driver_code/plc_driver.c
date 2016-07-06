@@ -301,6 +301,9 @@ static void plcdrv_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs
 	struct net_device *dev = (struct net_device *)dev_id;
 	/* ... and check with hw if it's really ours */
 
+	printk(KERN_WARNING "plc driver: In function regular_interrupt!!!\n");
+	msleep(5000);
+
 	/* paranoid */
 	if (!dev)
 		return;
@@ -468,6 +471,8 @@ int plcdrv_tx(struct sk_buff *skb, struct net_device *dev)
 	char *data, shortpkt[ETH_ZLEN];
 	struct plcdev_priv *priv = netdev_priv(dev);
 	
+	printk(KERN_WARNING "plc driver: Start tx in function plcdrv_tx!!!\n");
+	msleep(5000);
 	
 	data = skb->data;
 	len = skb->len;
@@ -544,11 +549,26 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
                 unsigned short type, const void *daddr, const void *saddr,
                 unsigned len)
 {
+
+	int i;
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
+
+	printk(KERN_WARNING "plc driver: Entering the plcdrv_header function!!!\n");
+	msleep(5000);
 
 	eth->h_proto = htons(type);
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
 	memcpy(eth->h_dest,   daddr ? daddr : dev->dev_addr, dev->addr_len);
+
+	/*find out which device dev is*/
+	for(i = 0; i<number_devs; i++){
+		if(dev == plc_devs[i]){
+			//increase the last byte by i to get diffrent addresses
+			dev->dev_addr[ETH_ALEN-1]+=i;
+			
+		}
+	}
+
 	eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
 	return (dev->hard_header_len);
 }
@@ -567,9 +587,14 @@ struct net_device_stats *plcdrv_stats(struct net_device *dev)
  */
 int plcdrv_open(struct net_device *dev)
 {
-
+	
 	int i;
+	char address[ETH_ALEN];
 	/* request_region(), request_irq(), ....  (like fops->open) */
+	
+	printk(KERN_WARNING "plc driver: Entering plcdrv_open. Now sleeping 5s!!!\n");
+
+	msleep(5000);
 
 	/* 
 	 * Assign the fake hardware address of the board:The first byte is '\0' to avoid being a multicast
@@ -577,20 +602,30 @@ int plcdrv_open(struct net_device *dev)
 	 */
 	
 	/*Copy the base hw address in the dev structure*/
-	memcpy(dev->dev_addr, "\0PLCI0", ETH_ALEN);
+	memcpy(dev->dev_addr, "\0SNUL0", ETH_ALEN);
+
 	
 	/*find out which device dev is*/
-	
 	for(i = 0; i<number_devs; i++){
 		if(dev == plc_devs[i]){
 			printk(KERN_WARNING "plc driver: Problem mit der MAC!!!\n");
-			/*increase the last byte by i to get diffrent addresses*/
-			//dev->dev_addr[ETH_ALEN-1]+i;
+			//increase the last byte by i to get diffrent addresses
+			dev->dev_addr[ETH_ALEN-1]+=2;
 			
 		}
 	}
+	/*for debug convert the address and print it*/
+	memcpy(address, dev->dev_addr+1, ETH_ALEN-1);
+	address[ETH_ALEN-1]='\0';
+	printk(KERN_WARNING "plc driver: MAC address = %s\n", address);
+
+	printk(KERN_WARNING "plc driver: plcdrv_open complete. Wait 5s and start queue!!!\n");
+
+	msleep(5000);
 	
 	netif_start_queue(dev);
+	printk(KERN_WARNING "plc driver: plcdrv_open start_queue complete!!!\n");
+	msleep(5000);
 	return 0;
 }
 
@@ -719,7 +754,7 @@ int plcdrv_init_module(void)
 	printk(KERN_WARNING "plc driver: Entering plcdrv_init_module!!!\n");
 
 	/*set the interrupt function depending on which mode sould be used*/
-	if(use_napi!=0){
+	if(use_napi==0){
 		plcdrv_interrupt = plcdrv_regular_interrupt;
 	}
 	else{
