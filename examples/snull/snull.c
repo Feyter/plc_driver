@@ -378,11 +378,13 @@ static void snull_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 		pkt = priv->rx_queue;
 		if (pkt) {
 			priv->rx_queue = pkt->next;
+			printk(KERN_DEBUG "SNULL: Its a rx!!!\n");	
 			snull_rx(dev, pkt);
 		}
 	}
 	if (statusword & SNULL_TX_INTR) {
 		/* a transmission is over: free the skb */
+		printk(KERN_DEBUG "SNULL: Its a tx!!!\n");
 		priv->stats.tx_packets++;
 		priv->stats.tx_bytes += priv->tx_packetlen;
 		dev_kfree_skb(priv->skb);
@@ -477,8 +479,12 @@ static void snull_hw_tx(char *buf, int len, struct net_device *dev)
 	saddr = &ih->saddr;
 	daddr = &ih->daddr;
 
+	printk(KERN_DEBUG "SNULL: Sending packet from: %u.%u.%u.%u \n", ((u8 *)saddr)[0], ((u8 *)saddr)[1], ((u8 *)saddr)[2], ((u8 *)saddr)[3]);
+
 	((u8 *)saddr)[2] ^= 1; /* change the third octet (class C) */
 	((u8 *)daddr)[2] ^= 1;
+
+	printk(KERN_DEBUG "SNULL: Sending packet to: %u.%u.%u.%u \n", ((u8 *)daddr)[0], ((u8 *)daddr)[1], ((u8 *)daddr)[2], ((u8 *)daddr)[3]);	
 
 	ih->check = 0;         /* and rebuild the checksum (ip needs it) */
 	ih->check = ip_fast_csum((unsigned char *)ih,ih->ihl);

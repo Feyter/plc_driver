@@ -52,7 +52,7 @@ module_param(timeout, int, 0);
 /*
  * Do we run in NAPI mode 0=no?
  */
-static int use_napi = 0;
+static int use_napi = 1;
 module_param(use_napi, int, 0);
 
 
@@ -321,12 +321,14 @@ static void plcdrv_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs
 		/* send it to rx for handling */
 		pkt = priv->rx_queue;
 		if (pkt) {
+			printk(KERN_DEBUG "plcdrv: Its a rx!!!\n");
 			priv->rx_queue = pkt->next;
 			plcdrv_rx(dev, pkt);
 		}
 	}
 	/*Ckeck if the status is TX_INTERRUPT*/
 	if (statusword & PLCDRV_TX_INTR) {
+		printk(KERN_DEBUG "plcdrv: Its a tx!!!\n");
 		/* a transmission is over: free the skb */
 		priv->stats.tx_packets++;
 		priv->stats.tx_bytes += priv->tx_packetlen;
@@ -354,6 +356,8 @@ static void plcdrv_napi_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	struct net_device *dev = (struct net_device *)dev_id;
 	/* ... and check with hw if it's really ours */
 
+	printk(KERN_DEBUG "plc driver: In function napi_interrupt!!!\n");
+
 	/* paranoid */
 	if (!dev)
 		return;
@@ -366,10 +370,12 @@ static void plcdrv_napi_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	statusword = priv->status;
 	priv->status = 0;
 	if (statusword & PLCDRV_RX_INTR) {
+		printk(KERN_DEBUG "plc driver: Its a rx!!!\n");
 		plcdrv_rx_ints(dev, 0);  /* Disable further interrupts */
 		napi_schedule(&priv->napi);
 	}
 	if (statusword & PLCDRV_TX_INTR) {
+		printk(KERN_DEBUG "plc driver: Its a tx!!!\n");
         	/* a transmission is over: free the skb */
 		priv->stats.tx_packets++;
 		priv->stats.tx_bytes += priv->tx_packetlen;
@@ -562,7 +568,7 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
 	for(i = 0; i<number_devs; i++){
 		if(dev == plc_devs[i]){
 			//increase the last byte by i to get diffrent addresses
-			eth->h_dest[ETH_ALEN-1]+=i;
+			//eth->h_dest[ETH_ALEN-1]+=i;
 			
 		}
 	}
