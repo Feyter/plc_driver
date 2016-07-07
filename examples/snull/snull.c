@@ -202,6 +202,10 @@ static void snull_rx_ints(struct net_device *dev, int enable)
 
 int snull_open(struct net_device *dev)
 {
+
+	char address[ETH_ALEN];	
+
+	printk(KERN_DEBUG "SNULL: Entering snull_open!!!\n");
 	/* request_region(), request_irq(), ....  (like fops->open) */
 
 	/* 
@@ -212,7 +216,15 @@ int snull_open(struct net_device *dev)
 	memcpy(dev->dev_addr, "\0SNUL0", ETH_ALEN);
 	if (dev == snull_devs[1])
 		dev->dev_addr[ETH_ALEN-1]++; /* \0SNUL1 */
+
+	memcpy(address, dev->dev_addr+1, ETH_ALEN-1);
+	address[ETH_ALEN-1]='\0';
+
+	printk(KERN_DEBUG "SNULL: MAC address = %s\n", address);
+
+	printk(KERN_DEBUG "SNULL: Starting netif_start_queue!!!\n");
 	netif_start_queue(dev);
+	printk(KERN_DEBUG "SNULL: Leaving snull_open!!!\n");
 	return 0;
 }
 
@@ -229,6 +241,8 @@ int snull_release(struct net_device *dev)
  */
 int snull_config(struct net_device *dev, struct ifmap *map)
 {
+
+	printk(KERN_DEBUG "SNULL: Starting ifconfig!!!\n");
 	if (dev->flags & IFF_UP) /* can't act on a running interface */
 		return -EBUSY;
 
@@ -256,6 +270,8 @@ void snull_rx(struct net_device *dev, struct snull_packet *pkt)
 	struct sk_buff *skb;
 	struct snull_priv *priv = netdev_priv(dev);
 
+	printk(KERN_DEBUG "SNULL: Going in snull_rx!!!\n");
+	
 	/*
 	 * The packet has been retrieved from the transmission
 	 * medium. Build an skb around it, so upper layers can handle it
@@ -343,6 +359,8 @@ static void snull_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	 */
 	struct net_device *dev = (struct net_device *)dev_id;
 	/* ... and check with hw if it's really ours */
+
+	printk(KERN_DEBUG "SNULL: Regular interrupt appeared!!!\n");
 
 	/* paranoid */
 	if (!dev)
@@ -513,6 +531,8 @@ int snull_tx(struct sk_buff *skb, struct net_device *dev)
 	char *data, shortpkt[ETH_ZLEN];
 	struct snull_priv *priv = netdev_priv(dev);
 	
+	printk(KERN_DEBUG "SNULL: Going in snull_tx!!!\n");
+
 	data = skb->data;
 	len = skb->len;
 	if (len < ETH_ZLEN) {
@@ -574,12 +594,22 @@ int snull_header(struct sk_buff *skb, struct net_device *dev,
                 unsigned short type, const void *daddr, const void *saddr,
                 unsigned len)
 {
+	char address[ETH_ALEN];
+	
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
+
+	printk(KERN_DEBUG "SNULL: Going in snull_header!!!\n");	
 
 	eth->h_proto = htons(type);
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
 	memcpy(eth->h_dest,   daddr ? daddr : dev->dev_addr, dev->addr_len);
 	eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
+	
+	/*for debug convert the address and print it*/
+	memcpy(address, eth->h_dest+1, ETH_ALEN-1);
+	address[ETH_ALEN-1]='\0';
+	printk(KERN_DEBUG "SNULL: header h_dest address = %s\n", address);
+
 	return (dev->hard_header_len);
 }
 

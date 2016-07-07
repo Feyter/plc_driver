@@ -301,8 +301,7 @@ static void plcdrv_regular_interrupt(int irq, void *dev_id, struct pt_regs *regs
 	struct net_device *dev = (struct net_device *)dev_id;
 	/* ... and check with hw if it's really ours */
 
-	printk(KERN_WARNING "plc driver: In function regular_interrupt!!!\n");
-	msleep(5000);
+	printk(KERN_DEBUG "plc driver: In function regular_interrupt!!!\n");
 
 	/* paranoid */
 	if (!dev)
@@ -471,7 +470,7 @@ int plcdrv_tx(struct sk_buff *skb, struct net_device *dev)
 	char *data, shortpkt[ETH_ZLEN];
 	struct plcdev_priv *priv = netdev_priv(dev);
 	
-	printk(KERN_WARNING "plc driver: Start tx in function plcdrv_tx!!!\n");
+	printk(KERN_DEBUG "plc driver: Start tx in function plcdrv_tx!!!\n");
 	msleep(5000);
 	
 	data = skb->data;
@@ -553,8 +552,7 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
 	int i;
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
 
-	printk(KERN_WARNING "plc driver: Entering the plcdrv_header function!!!\n");
-	msleep(5000);
+	printk(KERN_DEBUG "plc driver: Entering the plcdrv_header function!!!\n");
 
 	eth->h_proto = htons(type);
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
@@ -564,12 +562,14 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
 	for(i = 0; i<number_devs; i++){
 		if(dev == plc_devs[i]){
 			//increase the last byte by i to get diffrent addresses
-			dev->dev_addr[ETH_ALEN-1]+=i;
+			eth->h_dest[ETH_ALEN-1]+=i;
 			
 		}
 	}
 
-	eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
+	//printk(KERN_DEBUG "plc driver: plcdrv_header function! saddr: %s daddr %s \n", eth->h_source, eth->h_dest);
+	printk(KERN_DEBUG "plc driver: plcdrv_header function is over!!!\n");
+
 	return (dev->hard_header_len);
 }
 
@@ -592,7 +592,7 @@ int plcdrv_open(struct net_device *dev)
 	char address[ETH_ALEN];
 	/* request_region(), request_irq(), ....  (like fops->open) */
 	
-	printk(KERN_WARNING "plc driver: Entering plcdrv_open. Now sleeping 5s!!!\n");
+	printk(KERN_DEBUG "plc driver: Entering plcdrv_open. Now sleeping 5s!!!\n");
 
 	msleep(5000);
 
@@ -602,29 +602,29 @@ int plcdrv_open(struct net_device *dev)
 	 */
 	
 	/*Copy the base hw address in the dev structure*/
-	memcpy(dev->dev_addr, "\0SNUL0", ETH_ALEN);
+	memcpy(dev->dev_addr, "\0PLCI0", ETH_ALEN);
 
 	
 	/*find out which device dev is*/
 	for(i = 0; i<number_devs; i++){
 		if(dev == plc_devs[i]){
-			printk(KERN_WARNING "plc driver: Problem mit der MAC!!!\n");
 			//increase the last byte by i to get diffrent addresses
-			dev->dev_addr[ETH_ALEN-1]+=2;
+			dev->dev_addr[ETH_ALEN-1]+=i;
 			
 		}
 	}
 	/*for debug convert the address and print it*/
 	memcpy(address, dev->dev_addr+1, ETH_ALEN-1);
 	address[ETH_ALEN-1]='\0';
-	printk(KERN_WARNING "plc driver: MAC address = %s\n", address);
+	printk(KERN_DEBUG "plc driver: MAC address = %s\n", address);
 
-	printk(KERN_WARNING "plc driver: plcdrv_open complete. Wait 5s and start queue!!!\n");
+	printk(KERN_DEBUG "plc driver: plcdrv_open complete. Wait 5s and start queue!!!\n");
 
 	msleep(5000);
 	
+
 	netif_start_queue(dev);
-	printk(KERN_WARNING "plc driver: plcdrv_open start_queue complete!!!\n");
+	printk(KERN_DEBUG "plc driver: plcdrv_open start_queue complete!!!\n");
 	msleep(5000);
 	return 0;
 }
@@ -645,7 +645,7 @@ int plcdrv_config(struct net_device *dev, struct ifmap *map)
 {
 		
 
-	printk(KERN_WARNING "plc driver: Going in plcdev_config\n");
+	printk(KERN_DEBUG "plc driver: Going in plcdev_config\n");
 
 	msleep(2000);
 
@@ -692,7 +692,7 @@ void plcdev_init(struct net_device *dev)
 {
 
 	struct plcdev_priv *priv;
-	printk(KERN_WARNING "plc driver: going in plcdev_init for a dev!!!\n");
+	printk(KERN_DEBUG "plc driver: going in plcdev_init for a dev!!!\n");
 
 	/*
 	 * Then, initialize the priv field. This encloses the statistics
@@ -751,7 +751,7 @@ int plcdrv_init_module(void)
 {
 	int result, i, ret = -ENOMEM;
 
-	printk(KERN_WARNING "plc driver: Entering plcdrv_init_module!!!\n");
+	printk(KERN_DEBUG "plc driver: Entering plcdrv_init_module!!!\n");
 
 	/*set the interrupt function depending on which mode sould be used*/
 	if(use_napi==0){
