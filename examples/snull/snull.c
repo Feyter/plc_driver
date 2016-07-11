@@ -191,7 +191,9 @@ struct snull_packet *snull_dequeue_buf(struct net_device *dev)
  */
 static void snull_rx_ints(struct net_device *dev, int enable)
 {
+	
 	struct snull_priv *priv = netdev_priv(dev);
+	printk(KERN_DEBUG "SNULL: set interrup to %i!!!\n", enable);
 	priv->rx_int_enabled = enable;
 }
 
@@ -308,7 +310,9 @@ static int snull_poll(struct napi_struct *napi, int budget)
 	struct snull_priv *priv;
 	struct snull_packet *pkt;
 	struct net_device *dev;
-    
+ 
+	printk(KERN_DEBUG "SNULL: Going in poll!!!\n");
+   
 	priv = container_of(napi, struct snull_priv, napi);
 	dev = priv->dev;
 	while (npackets < budget && priv->rx_queue) {
@@ -411,6 +415,8 @@ static void snull_napi_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	struct net_device *dev = (struct net_device *)dev_id;
 	/* ... and check with hw if it's really ours */
 
+	printk(KERN_DEBUG "SNULL: napi interrupt appeared!!!\n");
+
 	/* paranoid */
 	if (!dev)
 		return;
@@ -423,10 +429,12 @@ static void snull_napi_interrupt(int irq, void *dev_id, struct pt_regs *regs)
 	statusword = priv->status;
 	priv->status = 0;
 	if (statusword & SNULL_RX_INTR) {
+		printk(KERN_DEBUG "SNULL: Its a rx!!!\n");
 		snull_rx_ints(dev, 0);  /* Disable further interrupts */
 		napi_schedule(&priv->napi);
 	}
 	if (statusword & SNULL_TX_INTR) {
+		printk(KERN_DEBUG "SNULL: Its a tx!!!\n");
         	/* a transmission is over: free the skb */
 		priv->stats.tx_packets++;
 		priv->stats.tx_bytes += priv->tx_packetlen;
@@ -582,6 +590,7 @@ void snull_tx_timeout (struct net_device *dev)
  */
 int snull_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
+	printk(KERN_DEBUG "SNULL: ioctl was called!!!\n");
 	PDEBUG("ioctl\n");
 	return 0;
 }
@@ -591,7 +600,9 @@ int snull_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
  */
 struct net_device_stats *snull_stats(struct net_device *dev)
 {
+	
 	struct snull_priv *priv = netdev_priv(dev);
+	printk(KERN_DEBUG "SNULL: snull_stats was called!!!\n");
 	return &priv->stats;
 }
 
@@ -601,15 +612,35 @@ int snull_header(struct sk_buff *skb, struct net_device *dev,
                 unsigned len)
 {
 	char address[ETH_ALEN];
+	int i;
 	
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
 
-	printk(KERN_DEBUG "SNULL: Going in snull_header!!!\n");	
+	printk(KERN_DEBUG "SNULL: Going in snull_header!!!\n");
+	if(saddr){
+		memcpy(address, saddr+1, ETH_ALEN-1);
+		address[ETH_ALEN-1]='\0';
+		printk(KERN_DEBUG "SNULL: saddr was given: %s!!!\n", address);
+	}
+	if(daddr){
+		memcpy(address, daddr+1, ETH_ALEN-1);
+		address[ETH_ALEN-1]='\0';
+		printk(KERN_DEBUG "SNULL: daddr was given: %s!!!\n", address);
+	}	
 
 	eth->h_proto = htons(type);
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
 	memcpy(eth->h_dest,   daddr ? daddr : dev->dev_addr, dev->addr_len);
-	eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
+	//eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
+
+	/*find out which device dev is*/
+	for(i = 0; i<2; i++){
+		if(dev == snull_devs[i]){
+			//increase the last byte by i to get diffrent addresses
+			eth->h_dest[ETH_ALEN-1]+=i;
+			
+		}
+	}
 	
 	/*for debug convert the address and print it*/
 	memcpy(address, eth->h_dest+1, ETH_ALEN-1);
@@ -629,10 +660,13 @@ int snull_header(struct sk_buff *skb, struct net_device *dev,
  */
 int snull_change_mtu(struct net_device *dev, int new_mtu)
 {
+	
 	unsigned long flags;
 	struct snull_priv *priv = netdev_priv(dev);
 	spinlock_t *lock = &priv->lock;
     
+	printk(KERN_DEBUG "SNULL: Going in change_mtu!!!\n");
+
 	/* check ranges */
 	if ((new_mtu < 68) || (new_mtu > 1500))
 		return -EINVAL;
@@ -668,6 +702,8 @@ static const struct header_ops snull_header_ops = {
 void snull_init(struct net_device *dev)
 {
 	struct snull_priv *priv;
+
+	printk(KERN_DEBUG "SNULL: make a snull_init!!!\n");
 
 	/*
 	 * Then, initialize the priv field. This encloses the statistics
@@ -722,6 +758,8 @@ struct net_device *snull_devs[2];
 void snull_cleanup(void)
 {
 	int i;
+
+	printk(KERN_DEBUG "SNULL: Making cleanup!!!\n");
     
 	for (i = 0; i < 2;  i++) {
 		if (snull_devs[i]) {
@@ -740,8 +778,11 @@ int snull_init_module(void)
 {
 	int result, i, ret = -ENOMEM;
 
+	printk(KERN_DEBUG "SNULL: init_module with use_napi = %i!!!\n", use_napi);
+
 	snull_interrupt = use_napi ? snull_napi_interrupt : snull_regular_interrupt;
 
+	printk(KERN_DEBUG "SNULL: init_module: allocating net_devices!!!\n");
 	/* Allocate the devices */
 	snull_devs[0] = alloc_netdev(sizeof(struct snull_priv), "sn%d", NET_NAME_UNKNOWN,
 			snull_init);
@@ -750,6 +791,7 @@ int snull_init_module(void)
 	if (snull_devs[0] == NULL || snull_devs[1] == NULL)
 		goto out;
 
+	printk(KERN_DEBUG "SNULL: init_module: register net_devices!!!\n");
 	ret = -ENODEV;
 	for (i = 0; i < 2;  i++)
 		if ((result = register_netdev(snull_devs[i])))

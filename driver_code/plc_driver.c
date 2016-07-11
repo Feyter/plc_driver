@@ -52,7 +52,7 @@ module_param(timeout, int, 0);
 /*
  * Do we run in NAPI mode 0=no?
  */
-static int use_napi = 1;
+static int use_napi = 0;
 module_param(use_napi, int, 0);
 
 
@@ -425,9 +425,13 @@ static void plcdrv_hw_tx(char *buf, int len, struct net_device *dev)
 	saddr = &ih->saddr;
 	daddr = &ih->daddr;
 
+	printk(KERN_DEBUG "plc_driver: Sending packet from: %u.%u.%u.%u \n", ((u8 *)saddr)[0], ((u8 *)saddr)[1], ((u8 *)saddr)[2], ((u8 *)saddr)[3]);
+
 	/*Copy the last octet in the therd octet of src and dest adress*/
 	((u8 *)saddr)[2] = ((u8 *)daddr)[3];
 	((u8 *)daddr)[2] = ((u8 *)daddr)[3];
+
+	printk(KERN_DEBUG "plc_driver: Sending packet to: %u.%u.%u.%u \n", ((u8 *)daddr)[0], ((u8 *)daddr)[1], ((u8 *)daddr)[2], ((u8 *)daddr)[3]);
 
 	ih->check = 0;         /* and rebuild the checksum (ip needs it) */
 	ih->check = ip_fast_csum((unsigned char *)ih,ih->ihl);
@@ -436,8 +440,22 @@ static void plcdrv_hw_tx(char *buf, int len, struct net_device *dev)
 	 * Ok, now the packet is ready for transmission: 
 	 */
 
-	/*the destination dev indicates from the last destination adress octet*/
-	dest = plc_devs[((u8 *)daddr)[3]];	
+	/*the destination dev depends from the last destination adress octet*/
+	dest = plc_devs[0];
+	switch(((u8 *)daddr)[3]){
+		case 1:{
+			dest = plc_devs[0];
+			break;
+		}
+		case 2:{
+			dest = plc_devs[1];
+			break;
+		}
+		case 3:{
+			dest = plc_devs[2];
+			break;
+		}
+	}	
 	
 	/*Put the packet in the tx_buffer of the sending device*/
 	tx_buffer = plcdrv_get_tx_buffer(dev);
@@ -477,7 +495,6 @@ int plcdrv_tx(struct sk_buff *skb, struct net_device *dev)
 	struct plcdev_priv *priv = netdev_priv(dev);
 	
 	printk(KERN_DEBUG "plc driver: Start tx in function plcdrv_tx!!!\n");
-	msleep(5000);
 	
 	data = skb->data;
 	len = skb->len;
@@ -556,12 +573,25 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
 {
 
 	int i;
+	char address[ETH_ALEN];
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
 
 	printk(KERN_DEBUG "plc driver: Entering the plcdrv_header function!!!\n");
 
+	if(saddr){
+		memcpy(address, saddr+1, ETH_ALEN-1);
+		address[ETH_ALEN-1]='\0';
+		printk(KERN_DEBUG "plc_driver: saddr was given: %s!!!\n", address);
+	}
+	if(daddr){
+		memcpy(address, daddr+1, ETH_ALEN-1);
+		address[ETH_ALEN-1]='\0';
+		printk(KERN_DEBUG "plc_driver: daddr was given: %s!!!\n", address);
+	}	
+
 	eth->h_proto = htons(type);
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
+
 	memcpy(eth->h_dest,   daddr ? daddr : dev->dev_addr, dev->addr_len);
 
 	/*find out which device dev is*/
@@ -585,6 +615,7 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
 struct net_device_stats *plcdrv_stats(struct net_device *dev)
 {
 	struct plcdev_priv *priv = netdev_priv(dev);
+	printk(KERN_DEBUG "plc driver: stats was called!!!\n");
 	return &priv->stats;
 }
 
@@ -598,9 +629,7 @@ int plcdrv_open(struct net_device *dev)
 	char address[ETH_ALEN];
 	/* request_region(), request_irq(), ....  (like fops->open) */
 	
-	printk(KERN_DEBUG "plc driver: Entering plcdrv_open. Now sleeping 5s!!!\n");
-
-	msleep(5000);
+	printk(KERN_DEBUG "plc driver: Entering plcdrv_open.!!!\n");
 
 	/* 
 	 * Assign the fake hardware address of the board:The first byte is '\0' to avoid being a multicast
@@ -624,14 +653,8 @@ int plcdrv_open(struct net_device *dev)
 	address[ETH_ALEN-1]='\0';
 	printk(KERN_DEBUG "plc driver: MAC address = %s\n", address);
 
-	printk(KERN_DEBUG "plc driver: plcdrv_open complete. Wait 5s and start queue!!!\n");
-
-	msleep(5000);
-	
-
 	netif_start_queue(dev);
 	printk(KERN_DEBUG "plc driver: plcdrv_open start_queue complete!!!\n");
-	msleep(5000);
 	return 0;
 }
 
@@ -652,8 +675,6 @@ int plcdrv_config(struct net_device *dev, struct ifmap *map)
 		
 
 	printk(KERN_DEBUG "plc driver: Going in plcdev_config\n");
-
-	msleep(2000);
 
 	if (dev->flags & IFF_UP) /* can't act on a running interface */
 		return -EBUSY;
@@ -780,12 +801,17 @@ int plcdrv_init_module(void)
 		goto out;
 
 	ret = -ENODEV;
-	for (i = 0; i < number_devs;  i++)
-		if ((result = register_netdev(plc_devs[i])))
-			printk("plc_driver: error %i registering device \"%s\"\n",
-					result, plc_devs[i]->name);
-		else
+	for (i = 0; i < number_devs;  i++){
+		printk(KERN_DEBUG "plc driver: register device %i!!!\n", i);
+		if ((result = register_netdev(plc_devs[i]))){
+			printk("plc_driver: error %i registering device \"%s\"\n", result, plc_devs[i]->name);
+		}
+		else{
+			printk(KERN_DEBUG "plc driver: register device %i scuceeded!!!\n", i);
 			ret = 0;
+		}
+			
+	}
    out:
 	if (ret) 
 		plcdrv_cleanup();
