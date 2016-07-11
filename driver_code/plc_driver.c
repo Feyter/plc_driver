@@ -566,17 +566,29 @@ int plcdrv_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 	return 0;
 }
 
-/*???*/
+/*Building up the header for the special conditions of the 3 device structure of this driver*/
 int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
                 unsigned short type, const void *daddr, const void *saddr,
                 unsigned len)
 {
 
-	int i;
+	u8 i;
 	char address[ETH_ALEN];
+	u32 *sipaddr, *dipaddr;
+	/*push the eth header in the sb_buff and save a pointer to it*/
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
+	/*get the ip header (it is right behind the eth header)*/
+	struct iphdr *ih = (struct iphdr *)(skb->data+sizeof(struct ethhdr));
 
 	printk(KERN_DEBUG "plc driver: Entering the plcdrv_header function!!!\n");
+
+	/*save the pointer to the ip addresse fields in the header*/
+	sipaddr = &ih->saddr;
+	dipaddr = &ih->daddr;
+
+	/*This is just for debug*/
+	printk(KERN_DEBUG "plc_driver: header source ip: %u.%u.%u.%u \n", ((u8 *)sipaddr)[0], ((u8 *)sipaddr)[1], ((u8 *)sipaddr)[2], ((u8 *)sipaddr)[3]);
+	printk(KERN_DEBUG "plc_driver: header destination ip: %u.%u.%u.%u \n", ((u8 *)dipaddr)[0], ((u8 *)dipaddr)[1], ((u8 *)dipaddr)[2], ((u8 *)dipaddr)[3]);
 
 	if(saddr){
 		memcpy(address, saddr+1, ETH_ALEN-1);
@@ -589,22 +601,23 @@ int plcdrv_header(struct sk_buff *skb, struct net_device *dev,
 		printk(KERN_DEBUG "plc_driver: daddr was given: %s!!!\n", address);
 	}	
 
+	/*set the type of the protocol*/
 	eth->h_proto = htons(type);
+	/*copy the source mac in eth header*/
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
 
-	memcpy(eth->h_dest,   daddr ? daddr : dev->dev_addr, dev->addr_len);
+	/*take out the last octet of the destination ip*/
+	i = ((u8 *)dipaddr)[3];
 
-	/*find out which device dev is*/
-	for(i = 0; i<number_devs; i++){
-		if(dev == plc_devs[i]){
-			//increase the last byte by i to get diffrent addresses
-			//eth->h_dest[ETH_ALEN-1]+=i;
-			
-		}
-	}
+	/*take the ground MAC and override the last byte with the last octet of the destination ip.
+	* this leeds to the rigth "fake" MAC address of the destination device*/
+	memcpy(eth->h_dest,   "\0PLCI0", ETH_ALEN);
+	eth->h_dest[ETH_ALEN-1]+=i;
 
-	//printk(KERN_DEBUG "plc driver: plcdrv_header function! saddr: %s daddr %s \n", eth->h_source, eth->h_dest);
-	printk(KERN_DEBUG "plc driver: plcdrv_header function is over!!!\n");
+	/*Debug prints and finish*/
+	memcpy(address, eth->h_dest+1, ETH_ALEN-1);
+	address[ETH_ALEN-1]='\0';
+	printk(KERN_DEBUG "plc_driver: daddr is now: %s!!!\n", address);
 
 	return (dev->hard_header_len);
 }
@@ -644,7 +657,7 @@ int plcdrv_open(struct net_device *dev)
 	for(i = 0; i<number_devs; i++){
 		if(dev == plc_devs[i]){
 			//increase the last byte by i to get diffrent addresses
-			dev->dev_addr[ETH_ALEN-1]+=i;
+			dev->dev_addr[ETH_ALEN-1]+=i+1;
 			
 		}
 	}

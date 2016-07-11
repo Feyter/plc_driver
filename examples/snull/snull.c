@@ -612,7 +612,6 @@ int snull_header(struct sk_buff *skb, struct net_device *dev,
                 unsigned len)
 {
 	char address[ETH_ALEN];
-	int i;
 	
 	struct ethhdr *eth = (struct ethhdr *)skb_push(skb,ETH_HLEN);
 
@@ -631,16 +630,7 @@ int snull_header(struct sk_buff *skb, struct net_device *dev,
 	eth->h_proto = htons(type);
 	memcpy(eth->h_source, saddr ? saddr : dev->dev_addr, dev->addr_len);
 	memcpy(eth->h_dest,   daddr ? daddr : dev->dev_addr, dev->addr_len);
-	//eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
-
-	/*find out which device dev is*/
-	for(i = 0; i<2; i++){
-		if(dev == snull_devs[i]){
-			//increase the last byte by i to get diffrent addresses
-			eth->h_dest[ETH_ALEN-1]+=i;
-			
-		}
-	}
+	eth->h_dest[ETH_ALEN-1]   ^= 0x01;   /* dest is us xor 1 */
 	
 	/*for debug convert the address and print it*/
 	memcpy(address, eth->h_dest+1, ETH_ALEN-1);
